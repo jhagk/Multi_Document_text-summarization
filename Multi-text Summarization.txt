@@ -1,0 +1,155 @@
+from nltk.corpus import stopwords
+from nltk.cluster.util import cosine_distance
+import numpy as np
+import networkx as nx
+import time as t
+ 
+def read_article(file_name):
+    file = open(file_name, "r")
+    filedata = file.readlines()#splitting entire text into paragraphs
+    article = filedata[0].split(".")#splitting each paragraph into sentences
+    sentences = []
+    print("Original Text:\n\n")
+
+    #splitting each sentence into list of words
+    for sentence in article:
+        if sentence!=article[-1]:
+            print(sentence,end=".")
+        else:
+            print(sentence)
+        sentences.append(sentence.replace("[^a-zA-Z]", " ").split(" "))
+    sentences.pop()#removing the '\n' character occurring at the last
+    
+    return sentences
+
+def sentence_similarity(sent1, sent2, stopwords=None):
+    if stopwords is None:
+        stopwords = []
+     
+    #converting each words of sentences into lowercase
+    sent1 = [w.lower() for w in sent1]
+    sent2 = [w.lower() for w in sent2]
+ 
+    #taking the list of distinct words from both the sentences
+    all_words = list(set(sent1 + sent2))
+    
+    #creating vector1 and vector2 for sentence1 and sentence2 respectively 
+    vector1 = [0] * len(all_words)
+    vector2 = [0] * len(all_words)
+    
+ 
+    # building the vector for the first sentence
+    for w in sent1:
+        if w in stopwords:
+            continue
+        vector1[all_words.index(w)] += 1
+ 
+    # building the vector for the second sentence
+    for w in sent2:
+        if w in stopwords:
+            continue
+        vector2[all_words.index(w)] += 1
+        
+    #calculating the cosine similarity value between sentence1 and sentence2
+    return 1 - cosine_distance(vector1, vector2)
+ 
+def build_similarity_matrix(sentences, stop_words):
+    
+    # Create an empty similarity matrix
+    similarity_matrix = np.zeros((len(sentences), len(sentences)))
+    
+ 
+    for idx1 in range(len(sentences)):
+        for idx2 in range(len(sentences)):
+            if idx1 == idx2: #ignore if both are same sentences
+                continue 
+            similarity_matrix[idx1][idx2] = sentence_similarity(sentences[idx1], sentences[idx2], stop_words)
+            
+    return similarity_matrix
+
+def cosine_similarity(sentences, stop_words):
+    # Step 2 - Generate Similary Martix across sentences
+    sentence_similarity_matrix = build_similarity_matrix(sentences, stop_words)
+
+    # Step 3 - Rank sentences in similarity martix
+    sentence_similarity_graph = nx.from_numpy_array(sentence_similarity_matrix)
+    scores = nx.pagerank(sentence_similarity_graph)
+    
+    return scores
+
+    
+def weighted_frequency(sentences, stop_words):
+    k,m,l=[],[],[]
+    s=0
+    for i in sentences:
+        for j in i:
+            if j.lower() not in stop_words:
+                m.append(j.lower())
+        l.append(m)
+        m=[]
+    for i in l:
+        m.extend(i)
+    t=list(dict.fromkeys(m))
+    for i in t:
+        k.append(m.count(i))
+    m=[]
+    for i in l:
+        for j in i:
+            s=s+(k[t.index(j)])
+        m.append(s)
+        s=0
+    return m
+        
+def print_answer(sentences, top_n, ranked_sentence):
+    summarize_text = [] 
+    f=[]
+    k=[0]*len(sentences)
+    for i in range(top_n):
+        f.append(ranked_sentence[i][1])
+    f.sort()
+    for j in f:
+        for i in range(top_n):
+            if j==ranked_sentence[i][1]:
+                summarize_text.append(" ".join(ranked_sentence[i][2]))
+
+    # Step 5 - Offcourse, output the summarize text
+    print(". ".join(summarize_text),end="")
+    
+def generate_summary(file_name, top_n):
+    stop_words = stopwords.words('english')
+    
+
+    # Step 1 - Read text anc split it
+    sentences =  read_article(file_name)
+    
+    cs=cosine_similarity(sentences, stop_words)
+    wm=weighted_frequency(sentences, stop_words)
+
+    # Step 4 - Sort the rank and pick top sentences
+    ranked_sentence_cs= sorted(((cs[i],i,s) for i,s in enumerate(sentences)), reverse=True)[:top_n]
+    ranked_sentence_wm= sorted(((wm[i],i,s) for i,s in enumerate(sentences)), reverse=True)[:top_n]
+    #print("Indexes of top ranked_sentence order are ", ranked_sentence)
+    print("\n\n\nSummarized text using Cosine Similarity:\n")
+    print_answer(sentences, top_n,ranked_sentence_cs)
+    print(".")
+    print("\n\n\nSummarized text using Weighted Frequency:\n")
+    print_answer(sentences, top_n,ranked_sentence_wm)
+    print(".\n\n")
+    t.sleep(3)
+    x=int(input("1.Summary using Cosine Similarity.\n2.Summary using Weighted Frequency.\n3.Exit\nEnter Choice:"))
+    while x!=1 and x!=2 and x!=3:
+        print("Invalid Choice.\n\n")
+        x=int(input("Please Choose again.\nEnter Choice:"))
+    if x==1:
+        print_answer(sentences, top_n,ranked_sentence_cs)
+        print(".")
+    elif x==2:
+        print_answer(sentences, top_n,ranked_sentence_wm)
+        print(".")
+    else:
+        print("\n\nScratch your head reading the entire article.")
+    
+    
+# let's begin
+n=int(input("Number of sentences in which summary is to be generated:"))
+generate_summary("msft.txt", n)
